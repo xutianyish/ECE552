@@ -465,7 +465,7 @@ sim_main(void)
          // reinitialize reg_used since hazard should not affect the same instruction twice
          // all reg results should be up to date after this instruction
          for(int j = 0; j < MD_TOTAL_REGS; j++){
-            reg_used_q1[j] = -3;
+            reg_used_q1[j] -= 2;
          }
       }
    }
@@ -476,7 +476,7 @@ sim_main(void)
          sim_num_RAW_hazard_s1_q1++;
          // reinitialize reg_used since hazard should not affect the same instruction twice
          for(int j = 0; j < MD_TOTAL_REGS; j++){
-            reg_used_q1[j] = -3;
+            reg_used_q1[j] -= 1;
          }
       }
    }
@@ -491,18 +491,21 @@ sim_main(void)
    
    // question 2 ----------------------------------------------------------------------
    for(int i = 0; i < 3; i++){
+      if((i==0) && (MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op)&F_STORE)){
+         continue;
+      }
       // 1-cycle-stall arithmetic after arithmetic instruction
-      if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 1) && !((MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op)&F_STORE))){
+      if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 1)){
          sim_num_RAW_hazard_s1_q2++;
          for(int j = 0; j < MD_TOTAL_REGS; j++){
-            reg_used_q2[j] = -2;
+            reg_used_q2[j] -= 1;
          }
       }
       // 2-cycle-stall arithmetic after load instruction
-      else if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 0) && !((MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op)&F_STORE))){
+      if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 0)){
          sim_num_RAW_hazard_s2_q2++;
          for(int j = 0; j < MD_TOTAL_REGS; j++){
-            reg_used_q2[j] = -2;
+            reg_used_q2[j] -= 2;
          }
       }
    }

@@ -358,7 +358,7 @@ sim_main(void)
   register int is_write;
   enum md_fault_type fault;
    
-  /* ECE552 Assignment 1 - STATS COUNTERS - BEGIN */
+  /* ECE552 Assignment 1 - BEGIN CODE */
   // question 1
   // initialize reg_used_q1
   for(int i = 0; i < MD_TOTAL_REGS; i++){
@@ -369,9 +369,7 @@ sim_main(void)
   for(int i = 0; i < MD_TOTAL_REGS; i++){
     reg_used_q2[i] = -2;
   }
-
-   
-  /* ECE552 Assignment 1 - STATS COUNTERS - END */
+  /* ECE552 Assignment 1 - END CODE*/
   int r_out[2], r_in[3];
 
   fprintf(stderr, "sim: ** starting functional simulation **\n");
@@ -454,7 +452,7 @@ sim_main(void)
       sim_num_loads++;
    }
    
-   /* ECE552 Assignment 1 - STATS COUNTERS - BEGIN */
+   /* ECE552 Assignment 1 - BEGIN CODE*/
    // question 1 ---------------------------------------------------------------------
    // detect potential hazard
    
@@ -465,6 +463,7 @@ sim_main(void)
          // reinitialize reg_used since hazard should not affect the same instruction twice
          // all reg results should be up to date after this instruction
          for(int j = 0; j < MD_TOTAL_REGS; j++){
+            // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
             reg_used_q1[j] -= 2;
          }
       }
@@ -476,6 +475,7 @@ sim_main(void)
          sim_num_RAW_hazard_s1_q1++;
          // reinitialize reg_used since hazard should not affect the same instruction twice
          for(int j = 0; j < MD_TOTAL_REGS; j++){
+            // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened
             reg_used_q1[j] -= 1;
          }
       }
@@ -498,6 +498,7 @@ sim_main(void)
       if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 1)){
          sim_num_RAW_hazard_s1_q2++;
          for(int j = 0; j < MD_TOTAL_REGS; j++){
+            // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened 
             reg_used_q2[j] -= 1;
          }
       }
@@ -505,6 +506,7 @@ sim_main(void)
       if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 0)){
          sim_num_RAW_hazard_s2_q2++;
          for(int j = 0; j < MD_TOTAL_REGS; j++){
+            // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
             reg_used_q2[j] -= 2;
          }
       }
@@ -523,7 +525,7 @@ sim_main(void)
    }
    sim_num_RAW_hazard_q2 = sim_num_RAW_hazard_s1_q2 + sim_num_RAW_hazard_s2_q2;
    // end of question 2 ---------------------------------------------------------------
-   /* ECE552 Assignment 1 - STATS COUNTERS - END */
+   /* ECE552 Assignment 1 - END CODE*/
 
    for(int i = 0; i < 3; i++){
       if(r_in[i] != DNA && reg_ready[r_in[i]] > sim_num_insn){

@@ -68,13 +68,13 @@
 
 /* ECE552 Assignment 1 - STATS COUNTERS - BEGIN */
 static counter_t sim_num_RAW_hazard_q1 = 0;
-static counter_t sim_num_RAW_hazard_s1_q1 = 0;
-static counter_t sim_num_RAW_hazard_s2_q1 = 0;
+static counter_t one_cycle_stall_q1 = 0;
+static counter_t two_cycle_stall_q1 = 0;
 static counter_t reg_used_q1[MD_TOTAL_REGS];
 
 static counter_t sim_num_RAW_hazard_q2 = 0;
-static counter_t sim_num_RAW_hazard_s1_q2 = 0;
-static counter_t sim_num_RAW_hazard_s2_q2 = 0;
+static counter_t one_cycle_stall_q2 = 0;
+static counter_t two_cycle_stall_q2 = 0;
 static counter_t reg_used_q2[MD_TOTAL_REGS];
 /* ECE552 Assignment 1 - STATS COUNTERS - END */
 static counter_t reg_ready[MD_TOTAL_REGS];
@@ -145,40 +145,39 @@ sim_reg_stats(struct stat_sdb_t *sdb)
 
   /* ECE552 Assignment 1 - BEGIN CODE */
    
-  // question 1 
+  // question 1
+  stat_reg_counter(sdb, "one_cycle_stall_q1",
+         "one-cycle stall (q1)",
+         &one_cycle_stall_q1, one_cycle_stall_q1, NULL);
+
+  stat_reg_counter(sdb, "two_cycle_stall_q1",
+         "two-cycle stall (q1)",
+         &two_cycle_stall_q1, two_cycle_stall_q1, NULL);
+
   stat_reg_counter(sdb, "sim_num_RAW_hazard_q1",
 		   "total number of RAW hazards (q1)",
 		   &sim_num_RAW_hazard_q1, sim_num_RAW_hazard_q1, NULL);
-   
-  stat_reg_counter(sdb, "sim_num_RAW_hazard_s1_q1",
-         "total number of 1-cycle-stall RAW hazards (q1)",
-         &sim_num_RAW_hazard_s1_q1, sim_num_RAW_hazard_s1_q1, NULL);
 
-  stat_reg_counter(sdb, "sim_num_RAW_hazard_s2_q1",
-         "total number of 2-cycle-stall RAW hazards (q2)",
-         &sim_num_RAW_hazard_s2_q1, sim_num_RAW_hazard_s2_q1, NULL);
-
-   stat_reg_formula(sdb, "CPI_from_RAW_hazard_q1",
+  stat_reg_formula(sdb, "CPI_from_RAW_hazard_q1",
 		   "CPI from RAW hazard (q1)",
-		   "1 + sim_num_RAW_hazard_s1_q1 / sim_num_insn + 2 * sim_num_RAW_hazard_s2_q1/ sim_num_insn", NULL);
+		   "1 + one_cycle_stall_q1 / sim_num_insn + 2 * two_cycle_stall_q1 / sim_num_insn", NULL);
   
   // question 2
+  stat_reg_counter(sdb, "one_cycle_stall_q2",
+         "one-cycle stall (q2)",
+         &one_cycle_stall_q2, one_cycle_stall_q2, NULL);
+
+  stat_reg_counter(sdb, "two_cycle_stall_q2",
+         "two-cycle stall (q2)",
+         &two_cycle_stall_q2, two_cycle_stall_q2, NULL);
+  
   stat_reg_counter(sdb, "sim_num_RAW_hazard_q2",
 		   "total number of RAW hazards (q2)",
 		   &sim_num_RAW_hazard_q2, sim_num_RAW_hazard_q2, NULL);
 
-  stat_reg_counter(sdb, "sim_num_RAW_hazard_s1_q2",
-         "total number of 1-cycle-stall RAW hazards (q2)",
-         &sim_num_RAW_hazard_s1_q2, sim_num_RAW_hazard_s1_q2, NULL);
-
-  stat_reg_counter(sdb, "sim_num_RAW_hazard_s2_q2",
-         "total number of 2-cycle-stall RAW hazaards (q2)",
-         &sim_num_RAW_hazard_s2_q2, sim_num_RAW_hazard_s2_q2, NULL);
-
-
   stat_reg_formula(sdb, "CPI_from_RAW_hazard_q2",
 		   "CPI from RAW hazard (q2)",
-		   "1 + sim_num_RAW_hazard_s1_q2 / sim_num_insn + 2 * sim_num_RAW_hazard_s2_q2 / sim_num_insn" , NULL);
+		   "1 + one_cycle_stall_q2 / sim_num_insn + 2 * two_cycle_stall_q2 / sim_num_insn" , NULL);
   
   /* ECE552 Assignment 1 - END CODE */ 
   
@@ -455,29 +454,34 @@ sim_main(void)
    /* ECE552 Assignment 1 - BEGIN CODE*/
    // question 1 ---------------------------------------------------------------------
    // detect potential hazard
-   
+   int stall_q1 = 0;
+   int max_stall_q1 = 0;
+
    // check whether it causes a 2-cycle-stall
    for(int i = 0; i < 3; i++){
-      if(r_in[i] != DNA && sim_num_insn - reg_used_q1[r_in[i]] == 1){
-         sim_num_RAW_hazard_s2_q1++;
-         // reinitialize reg_used since hazard should not affect the same instruction twice
-         // all reg results should be up to date after this instruction
-         for(int j = 0; j < MD_TOTAL_REGS; j++){
-            // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
-            reg_used_q1[j] -= 2;
-         }
+      if(r_in[i] == DNA) continue;
+      if(sim_num_insn - reg_used_q1[r_in[i]] == 1) stall_q1 = 2;
+      else if(sim_num_insn - reg_used_q1[r_in[i]] == 2) stall_q1 = 1;
+      
+      if(stall_q1 > max_stall_q1){
+         max_stall_q1 = stall_q1; 
       }
    }
-  
-   // check whether it causes a 1-cycle-stall
-   for(int i = 0; i < 3; i++){
-      if(r_in[i] != DNA && sim_num_insn - reg_used_q1[r_in[i]] == 2){
-         sim_num_RAW_hazard_s1_q1++;
-         // reinitialize reg_used since hazard should not affect the same instruction twice
-         for(int j = 0; j < MD_TOTAL_REGS; j++){
-            // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened
-            reg_used_q1[j] -= 1;
-         }
+   
+   if(max_stall_q1 == 1){
+      one_cycle_stall_q1++;
+      // reinitialize reg_used since hazard should not affect the same instruction twice
+      for(int j = 0; j < MD_TOTAL_REGS; j++){
+         // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened
+         reg_used_q1[j] -= 1;
+      }
+   }else if(max_stall_q1 == 2){
+      two_cycle_stall_q1++;
+      // reinitialize reg_used since hazard should not affect the same instruction twice
+      // all reg results should be up to date after this instruction
+      for(int j = 0; j < MD_TOTAL_REGS; j++){
+         // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
+         reg_used_q1[j] -= 2;
       }
    }
 
@@ -486,29 +490,40 @@ sim_main(void)
       reg_used_q1[r_out[0]] = sim_num_insn;
    if(r_out[1] != DNA)
       reg_used_q1[r_out[1]] = sim_num_insn;
-   sim_num_RAW_hazard_q1 = sim_num_RAW_hazard_s1_q1 + sim_num_RAW_hazard_s2_q1;
+   sim_num_RAW_hazard_q1 = one_cycle_stall_q1 + two_cycle_stall_q1;
    // end of question 1 ---------------------------------------------------------------
    
    // question 2 ----------------------------------------------------------------------
+   int max_stall_q2 = 0;
+   int stall_q2 = 0;
    for(int i = 0; i < 3; i++){
-      if((i==0) && (MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op)&F_STORE)){
+      if(((i==0) && (MD_OP_FLAGS(op)&F_MEM) && (MD_OP_FLAGS(op)&F_STORE))
+         || r_in[i] == DNA){
          continue;
       }
-      // 1-cycle-stall arithmetic after arithmetic instruction
-      if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 1)){
-         sim_num_RAW_hazard_s1_q2++;
-         for(int j = 0; j < MD_TOTAL_REGS; j++){
-            // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened 
-            reg_used_q2[j] -= 1;
-         }
+
+      if(sim_num_insn - reg_used_q2[r_in[i]] == 0) {
+         stall_q2 = 2;
+      } else if(sim_num_insn - reg_used_q2[r_in[i]] == 1) {
+         stall_q2 = 1;
       }
-      // 2-cycle-stall arithmetic after load instruction
-      if(r_in[i] != DNA && (sim_num_insn - reg_used_q2[r_in[i]] == 0)){
-         sim_num_RAW_hazard_s2_q2++;
-         for(int j = 0; j < MD_TOTAL_REGS; j++){
-            // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
-            reg_used_q2[j] -= 2;
-         }
+
+      if(stall_q2 > max_stall_q2){
+         max_stall_q2 = stall_q2;
+      }
+   }
+
+   if(max_stall_q2 == 1){
+      one_cycle_stall_q2++;
+      for(int j = 0; j < MD_TOTAL_REGS; j++){
+         // all the dest regs encountered are 2 cycles before since a stall of 1 cycle happened 
+         reg_used_q2[j] -= 1;
+      }
+   }else if(max_stall_q2 == 2){
+      two_cycle_stall_q2++;
+      for(int j = 0; j < MD_TOTAL_REGS; j++){
+         // all the dest regs encountered are 3 cycles before since a stall of 2 cycles happened
+         reg_used_q2[j] -= 2;
       }
    }
    
@@ -523,7 +538,7 @@ sim_main(void)
       if(r_out[1] != DNA)
          reg_used_q2[r_out[1]] = sim_num_insn;
    }
-   sim_num_RAW_hazard_q2 = sim_num_RAW_hazard_s1_q2 + sim_num_RAW_hazard_s2_q2;
+   sim_num_RAW_hazard_q2 = one_cycle_stall_q2 + two_cycle_stall_q2;
    // end of question 2 ---------------------------------------------------------------
    /* ECE552 Assignment 1 - END CODE*/
 

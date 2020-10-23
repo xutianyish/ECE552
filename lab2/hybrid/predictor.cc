@@ -105,7 +105,7 @@ void InitPredictor_openend() {
       PAp_BHT_open[i] = 0;
    }
    for(int i = 0; i < 8; i++){
-      for(int j = 0; j < 4096; j++){
+      for(int j = 0; j < 2048; j++){
          PAp_PHT_open[i][j] = 7;
       }
    }

@@ -46,15 +46,9 @@ The reported result is 13021048 which is close.
 
 -total number of mispredictions:
 The entire outcome sequence is TTTTTTTTNTTTN*
+The width of BHT table is 6, and the first two branches are within 8 instructions apart (i.e aliasing occurs), 
+so what we really look at is  TTTTTTTNTTTN*
 for every loop, there should be 1 misprediction since the pattern TTTTTT has two potential outcomes.
-Assume that the entry is initialized to WEAKLY_NOT_TAKEN
-The first time when the pattern is encountered the outcome is T, so the predictor state becomes WEAKLY_TAKEN 
-The second time when the pattern is encountered the outcome is T, so the predictor state becomes STRONGLY_TAKEN
-The third time when the pattern is encountered the outcome is N, so the predictor state becomes WEAKLY_TAKEN
-...
-Once it stablizes, the prediction and outcomes for the TTTTTT entry of the histroy table for 1 iteration are:
-prediction: TTT
-outcomes:   TTN
 Therefore there is 1 misprediction for each loop.
 so the number of misprediction should be around 1000000, the reported one is 1001848, which is close.
 

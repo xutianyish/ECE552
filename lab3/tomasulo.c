@@ -92,7 +92,7 @@ static instruction_t* fuFP[FU_FP_SIZE];
 //common data bus
 static instruction_t* commonDataBus = NULL;
 
-//The map table keeps track of whi`ch instruction produces the value for each register
+//The map table keeps track of which instruction produces the value for each register
 static instruction_t* map_table[MD_TOTAL_REGS];
 
 //the index of the last instruction fetched
@@ -143,6 +143,7 @@ static bool is_simulation_done(counter_t sim_insn) {
       if(fuINT[i] != NULL) return false;
    for(int i = 0; i < FU_FP_SIZE; i++)
       if(fuFP[i] != NULL) return false;
+   if(commonDataBus != NULL) return false;
    
    return true;
    /* ECE552 Assignment 3 - END CODE */
@@ -487,10 +488,10 @@ counter_t runTomasulo(instruction_trace_t* trace)
      issue_To_execute(cycle);
      dispatch_To_issue(cycle);
      fetch_To_dispatch(trace, cycle);
-     /* ECE552 Assignment 3 - END CODE */
      cycle++;
      if (is_simulation_done(sim_num_insn))
         break;
+     /* ECE552 Assignment 3 - END CODE */
   }
   
   return cycle;

@@ -806,7 +806,7 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
         }
     } else if (((double)cp->misses==THRESHOLD-TOLERANCE)){
         if(!initial_delta){
-            if(!(addr&(1<<(TOLERANCE+THRESHOLD+THRESHOLD)))){
+            if((addr&(1<<(THRESHOLD)))){
                 prefetch_opt=2;
                 initial_stride=1;
             } 
@@ -816,18 +816,35 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
     
    // generate prefetch
    md_addr_t new_addr = CACHE_BADDR(cp, addr + rpt_conf[rpt_index].stride);
-   if((rpt_conf[rpt_index].state != t02)&&(rpt_conf[rpt_index].state != t01)&& !cache_probe(cp, new_addr)){
-      cache_access(
-          cp,	                        /* cache to access */
-          Read,		                  /* access type, Read or Write */
-          new_addr,		               /* address of access */
-          NULL,			               /* ptr to buffer for input/output */
-          cp->bsize,		               /* number of bytes to access */
-          0,	   	                  /* time of access */
-          NULL,		                  /* for return of user data ptr */
-          NULL,	                     /* for address of replaced block */
-          1);	                        /* 1 if the access is a prefetch, 0 if it is not */
-   }
+    if(prefetch_opt==2){
+        if((rpt_conf[rpt_index].state != t03)&&(rpt_conf[rpt_index].state != t02)&&(rpt_conf[rpt_index].state != t01)&& !cache_probe(cp, new_addr)){
+          cache_access(
+            cp,	                        /* cache to access */
+            Read,		                  /* access type, Read or Write */
+            new_addr,		               /* address of access */
+            NULL,			               /* ptr to buffer for input/output */
+            cp->bsize,		               /* number of bytes to access */
+            0,	   	                  /* time of access */
+            NULL,		                  /* for return of user data ptr */
+            NULL,	                     /* for address of replaced block */
+            1);	                        /* 1 if the access is a prefetch, 0 if it is not */
+        }       
+    }
+    else{
+        if((rpt_conf[rpt_index].state != t02)&&(rpt_conf[rpt_index].state != t01)&& !cache_probe(cp, new_addr)){
+        cache_access(
+            cp,	                        /* cache to access */
+            Read,		                  /* access type, Read or Write */
+            new_addr,		               /* address of access */
+            NULL,			               /* ptr to buffer for input/output */
+            cp->bsize,		               /* number of bytes to access */
+            0,	   	                  /* time of access */
+            NULL,		                  /* for return of user data ptr */
+            NULL,	                     /* for address of replaced block */
+            1);	                        /* 1 if the access is a prefetch, 0 if it is not */
+         }
+    }
+
    /* ECE552 Assignment 4 - END CODE*/
 }
 

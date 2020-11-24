@@ -505,6 +505,124 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
 
 }
 
+/* ECE552 Assignment 4 - BEGIN CODE*/
+#define TOLERANCE 3
+#define THRESHOLD 5
+#define delta_array 8
+#define TABLE_SIZE_PART2 16
+#define delta_table 64
+#define ALGOCHECK1(flag) ((flag==0)?t02:t03)
+#define ALGOCHECK2(flag) ((flag==0)?t02:t04)
+#define ALGOCHECK3(flag) ((flag==0)?t03:t04)
+
+typedef struct dpt_entry {
+	md_addr_t tag;
+	md_addr_t prev_addr;
+	md_addr_t prev_prefetch;
+	int delta[delta_array];
+	int delta_ptr;
+}dpt_entry;
+
+bool_t initial_delta=0;
+static struct dpt_entry* dcpt = NULL; // delta correlation prediction table
+static md_addr_t candidates[delta_array];
+static int candidates_size = 0;
+static md_addr_t prefetch[32] = {0};
+static int prefetch_size = 0;
+
+void delta_correlation(dpt_entry dcpt_entry) {
+   int last = (dcpt_entry.delta_ptr - 1 + delta_array) % delta_array;
+   int d1 = dcpt_entry.delta[last];
+   int d2 = dcpt_entry.delta[(last-1+delta_array) %delta_array];
+   md_addr_t addr = dcpt_entry.prev_addr;
+   candidates_size = 0;
+		
+   for (int i = ((last - 2 + delta_array) % delta_array); i != last; i = ((i - 2 + delta_array) % delta_array)) {
+      int u = dcpt_entry.delta[i];
+      int v = dcpt_entry.delta[(i-1+ delta_array) % delta_array];
+      int remaining = 0;
+      if ((d1 == u) && (d2 == v)) {
+         for (int j = (i-1+delta_array)%delta_array; j!=last; j=(j+1+delta_array) %delta_array) {
+            addr = addr + dcpt_entry.delta[j];
+				candidates[candidates_size] = addr;
+				candidates_size++;
+			}
+			addr = addr + dcpt_entry.delta[last];
+			candidates[candidates_size] = addr;
+			candidates_size++;
+         return;
+      }
+   }
+}
+
+void prefetch_filter(struct cache_t* cp, int dcpt_index){
+   prefetch_size = 0;
+   int inFlight[32] ={0};
+   int prev_prefetch = dcpt[dcpt_index].prev_prefetch;
+   for (int i = 0 ; i < candidates_size; i++) {
+	   int in_flight = 0;
+	   int in_cache = 0;		
+	   if(cache_probe(cp, CACHE_BADDR(cp, candidates[i]))) in_cache = 1;
+      
+	   if (!in_cache) {
+		   for (int j = 0; j < 32; j++) {
+			   if (candidates[i] == inFlight[j]) in_flight = 1;
+		   }
+	   }
+
+	   if ((!in_flight) && (!in_cache)) {
+		   prefetch[prefetch_size] = candidates[i];
+		   prefetch_size++;
+		   dcpt[dcpt_index].prev_prefetch = candidates[i];
+		   for (int j = 32-1; j > 0; j--) 
+            inFlight[j] = inFlight[j-1];
+		   inFlight[0] = candidates[i];
+	   }
+	   if (candidates[i] == prev_prefetch) {
+		   for (int j = 0; j < prefetch_size; j++)
+			   prefetch[j] = 0;
+		   prefetch_size = 0;
+	   }
+	}
+}
+
+typedef enum{ //Confidence
+   t01,//very disagree
+   t02,//disagree
+   t03,//agree
+   t04 //very agree
+}state_confidence;
+
+typedef struct rpt_confidence{//Least Recent Use
+   md_addr_t tag;
+   md_addr_t prev_addr;
+   int stride;
+   state_confidence state;
+   int counter;
+}rpt_confidence;
+
+static rpt_confidence* rpt_conf = NULL; // reference prediction table
+bool_t initial_stride=0;
+int used_size = -1; 
+int prefetch_opt=0;
+
+typedef enum{
+   INIT,
+   STEADY,
+   TRANSIENT,
+   NOPRED
+}state_t;
+
+typedef struct rpt_t{
+   md_addr_t tag;
+   md_addr_t prev_addr;
+   int stride;
+   state_t state;
+}rpt_t;
+
+static rpt_t* rpt = NULL; // reference prediction table
+/* ECE552 Assignment 4 - END CODE*/
+
 /* Next Line Prefetcher */
 void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
    /* ECE552 Assignment 4 - BEGIN CODE*/
@@ -524,90 +642,178 @@ void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
    /* ECE552 Assignment 4 - END CODE*/
 }
 
-/* ECE552 Assignment 4 - BEGIN CODE*/
-//Confidence
-typedef enum{
-   t01,
-   t02,
-   t03,
-   t04
-}state_confidence;
-
-typedef struct rpt_confidence{
-   md_addr_t tag;
-   md_addr_t prev_addr;
-   int stride;
-   state_confidence state;
-}rpt_confidence;
-
-static rpt_confidence* rpt_conf = NULL; // reference prediction table
-/* ECE552 Assignment 4 - END CODE*/
-
 /* Open Ended Prefetcher */
 void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
-   /* ECE552 Assignment 4 - BEGIN CODE*/
-   int rpt_size = cp->prefetch_type;
-   rpt_size = 200;
-   if(rpt_conf == NULL){
-      rpt_conf = (rpt_confidence*)malloc(sizeof(rpt_confidence) * rpt_size);
-      // rpt_conf initialization
-      for(int i=0; i< rpt_size; i++){
-         rpt_conf[i].tag = 0;
-         rpt_conf[i].state = t01;
-      }
-   }
-   
-   // get the rpt_conf tag and index
-   md_addr_t pc = get_PC();
-   int rpt_index = (pc >> 3) % rpt_size;
-   
-   // update rpt entries depending on the scenarios
-   // scenario 1: no corresponding entry in RPT
-   if(rpt_conf[rpt_index].tag != pc){
-      rpt_conf[rpt_index].tag = pc;
-      rpt_conf[rpt_index].state = t03;
-      rpt_conf[rpt_index].stride = 0;
-      rpt_conf[rpt_index].prev_addr = addr;
-   }
-   // scenario 2: there is a corresponding entry in RPT
-   else{
-      int new_stride = addr - rpt_conf[rpt_index].prev_addr;
-      bool_t correct = new_stride == rpt_conf[rpt_index].stride;
-      
-      // update prev_addr
-      rpt_conf[rpt_index].prev_addr = addr;
+    /* ECE552 Assignment 4 - BEGIN CODE*/
+    // initialize dcpt
+    if(dcpt == NULL){
+       dcpt = malloc(sizeof(dpt_entry) * delta_table);
+       for(int i = 0; i < delta_table; i++){
+          dcpt[i].tag = 0;
+       }
+    }
+    
+    if(initial_delta&&prefetch_opt==2){
+        md_addr_t tag_pc =get_PC();
+        int dcpt_index = (tag_pc >> 3) % delta_table;
+        int stride = addr - dcpt[dcpt_index].prev_addr;
+        if (dcpt[dcpt_index].tag != tag_pc) {
+                dcpt[dcpt_index].tag = tag_pc;
+                dcpt[dcpt_index].prev_addr = addr;
+                dcpt[dcpt_index].prev_prefetch = 0;
+                dcpt[dcpt_index].delta_ptr = 0;
 
-      // update the current state
-      if(rpt_conf[rpt_index].state == t01){
-         if(correct){
-            rpt_conf[rpt_index].state = t02;
-         }else{
-            rpt_conf[rpt_index].state = t01;
-            rpt_conf[rpt_index].stride = new_stride; 
-         }
-      }else if(rpt_conf[rpt_index].state == t02){
-         if(correct){
-            rpt_conf[rpt_index].state = t03;
-         }else{
-            rpt_conf[rpt_index].state = t01;
-            rpt_conf[rpt_index].stride = new_stride;
-         }
-      }else if(rpt_conf[rpt_index].state == t03){
-         if(correct){
-            rpt_conf[rpt_index].state = t04;
-         }else{
-            rpt_conf[rpt_index].state = t02;
-            rpt_conf[rpt_index].stride = new_stride;
-         }
-      }else if(rpt_conf[rpt_index].state == t04){
-         if(correct){
-            rpt_conf[rpt_index].state = t04;
-         }else{
-            rpt_conf[rpt_index].state = t03;
-         }
-      }
-   }
+                for (int i=0; i<delta_array; i++)
+                        dcpt[dcpt_index].delta[i] = 0;
+        }
 
+        else if (stride != 0) {
+            dcpt[dcpt_index].delta[dcpt[dcpt_index].delta_ptr] = stride;
+            dcpt[dcpt_index].delta_ptr = (dcpt[dcpt_index].delta_ptr + 1 + delta_array) % delta_array;
+            dcpt[dcpt_index].prev_addr = addr;
+            delta_correlation(dcpt[dcpt_index]); 
+            prefetch_filter(cp, dcpt_index);
+            // issue prefetches
+            for (int i = 0; i < prefetch_size; i++){
+                cache_access(cp, Read, CACHE_BADDR(cp, prefetch[i]), NULL, cp->bsize, 0, NULL, NULL, 1);
+            }
+        }
+    }
+    
+    int rpt_size = TABLE_SIZE_PART2 + delta_table;
+    if(rpt_conf == NULL){
+        rpt_conf = (rpt_confidence*)malloc(sizeof(rpt_confidence) * rpt_size);
+        // rpt_conf initialization
+        for(int i=0; i< rpt_size; i++){
+           rpt_conf[i].tag = 0;
+           rpt_conf[i].state = t01;
+        }
+    }
+   
+    md_addr_t pc = get_PC();
+    
+    int rpt_index = -1;
+    
+    if(used_size == -1){
+        used_size += 1;
+        rpt_index = used_size;
+        rpt_conf[rpt_index].tag = pc;
+        rpt_conf[rpt_index].state = ALGOCHECK1(prefetch_opt);
+        rpt_conf[rpt_index].stride = 0;
+        rpt_conf[rpt_index].prev_addr = addr;
+        rpt_conf[rpt_index].counter = used_size;
+    }    
+    else {
+        bool_t found = (0==1);
+        for(int i=0;i<=used_size;i++){
+            if(pc==rpt_conf[i].tag){
+                found = (1==1);
+                rpt_index = i;
+                break;
+            }
+        }
+        
+        if(found){            
+            int counter_before = rpt_conf[rpt_index].counter;
+
+            for(int i=0; i<=used_size;i++){
+                if(rpt_conf[i].counter > counter_before){
+                    rpt_conf[i].counter = rpt_conf[i].counter -1;
+                }
+                else if(rpt_conf[i].counter==counter_before){
+                    rpt_conf[i].counter = used_size;
+                    int new_stride = addr - rpt_conf[i].prev_addr;
+                    bool_t correct = new_stride == rpt_conf[i].stride;
+                    rpt_conf[i].prev_addr = addr;
+                    if(rpt_conf[i].state == t01){
+                       if(correct){
+                          rpt_conf[i].state = ALGOCHECK2(prefetch_opt);
+                       }else{
+                          rpt_conf[i].state = t01;
+                          rpt_conf[i].stride = new_stride; 
+                       }
+                    }else if(rpt_conf[i].state == t02){
+                       if(correct){
+                          rpt_conf[i].state = ALGOCHECK3(prefetch_opt);
+                       }else{
+                          rpt_conf[i].state = t01;
+                          rpt_conf[i].stride = new_stride;
+                       }
+                    }else if(rpt_conf[i].state == t03){
+                       if(correct){
+                          rpt_conf[i].state = t04;
+                       }else{
+                          rpt_conf[i].state = t02;
+                          rpt_conf[i].stride = new_stride;
+                       }
+                    }else if(rpt_conf[i].state == t04){
+                       if(correct){
+                          rpt_conf[i].state = t04;
+                       }else{
+                          rpt_conf[i].state = t03;
+                       }
+                    }                    
+                }
+            }            
+        }
+        else{// not found
+            if(used_size==TABLE_SIZE_PART2 + delta_table - 1){//full
+                for(int i = 0;i<=used_size;i++){
+                    if(rpt_conf[i].state == t01){
+                        rpt_index = i;
+                        break;
+                    }
+                    if(rpt_conf[i].counter==0){
+                        rpt_index = i;
+                    }                    
+                }
+                rpt_conf[rpt_index].tag = pc;
+                rpt_conf[rpt_index].state = ALGOCHECK1(prefetch_opt);
+                rpt_conf[rpt_index].stride = 0;
+                rpt_conf[rpt_index].prev_addr = addr;
+                int counter_before = rpt_conf[rpt_index].counter;
+                for(int i=0; i<=used_size;i++){
+                    if(rpt_conf[i].counter > counter_before){
+                        rpt_conf[i].counter = rpt_conf[i].counter -1;
+                    }
+                    else if(rpt_conf[i].counter==counter_before){
+                        rpt_conf[i].counter = used_size;
+                    }
+                }                
+                
+            }
+            else{//not full
+                used_size += 1;
+                rpt_index = used_size;
+                rpt_conf[rpt_index].tag = pc;
+                rpt_conf[rpt_index].state = ALGOCHECK1(prefetch_opt);
+                rpt_conf[rpt_index].stride = 0;
+                rpt_conf[rpt_index].prev_addr = addr;
+                rpt_conf[rpt_index].counter = used_size;
+            }
+        }
+    }
+    
+    if(((double)cp->misses==TOLERANCE)){// number of misses over the TOLERANCE change the linear confidence to jump confidence or delta;
+        if(!initial_stride){
+            if(pc&(1<<THRESHOLD)){
+                prefetch_opt=0;
+            }
+            else{
+                prefetch_opt=1;
+            }
+            initial_stride=1;
+        }
+    } else if (((double)cp->misses==THRESHOLD-TOLERANCE)){
+        if(!initial_delta){
+            if(!(addr&(1<<(TOLERANCE+THRESHOLD+THRESHOLD)))){
+                prefetch_opt=2;
+                initial_stride=1;
+            } 
+        }  
+        initial_delta=1;
+    }
+    
    // generate prefetch
    md_addr_t new_addr = CACHE_BADDR(cp, addr + rpt_conf[rpt_index].stride);
    if((rpt_conf[rpt_index].state != t02)&&(rpt_conf[rpt_index].state != t01)&& !cache_probe(cp, new_addr)){
@@ -624,24 +830,6 @@ void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
    }
    /* ECE552 Assignment 4 - END CODE*/
 }
-
-/* ECE552 Assignment 4 - BEGIN CODE*/
-typedef enum{
-   INIT,
-   STEADY,
-   TRANSIENT,
-   NOPRED
-}state_t;
-
-typedef struct rpt_t{
-   md_addr_t tag;
-   md_addr_t prev_addr;
-   int stride;
-   state_t state;
-}rpt_t;
-
-static rpt_t* rpt = NULL; // reference prediction table
-/* ECE552 Assignment 4 - END CODE*/
 
 /* Stride Prefetcher */
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
@@ -673,7 +861,7 @@ void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
       int new_stride = addr - rpt[rpt_index].prev_addr;
       bool_t correct = new_stride == rpt[rpt_index].stride;
       
-      // update prev_addr
+      // update prev_addrprefetch_opt
       rpt[rpt_index].prev_addr = addr;
 
       // update the current state
